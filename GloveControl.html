@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Glove Control</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0D1117;
+    color: #E6EDF3;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    padding: 20px 16px 40px;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #fff;
+  }
+
+  .subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: #8B949E;
+    margin-bottom: 20px;
+  }
+
+  #status {
+    text-align: center;
+    font-size: 13px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    background: #161B22;
+    border: 1px solid #30363D;
+    margin-bottom: 20px;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #8B949E;
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .dot.connected { background: #3FB950; }
+  .dot.scanning  { background: #D29922; animation: pulse 1s infinite; }
+  .dot.error     { background: #F85149; }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+  }
+
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+  button:active { transform: scale(0.97); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .btn-primary   { background: #1F6FEB; color: #fff; }
+  .btn-secondary { background: #21262D; color: #E6EDF3; border: 1px solid #30363D; }
+  .btn-success   { background: #238636; color: #fff; }
+  .btn-send      { background: #1F6FEB; color: #fff; padding: 10px; font-size: 13px; }
+
+  .card {
+    background: #161B22;
+    border: 1px solid #30363D;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 14px;
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+
+  .param-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #E6EDF3;
+  }
+
+  .param-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1F6FEB;
+    min-width: 70px;
+    text-align: right;
+  }
+
+  input[type=range] {
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #30363D;
+    border-radius: 3px;
+    outline: none;
+    margin-bottom: 8px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: #1F6FEB;
+    cursor: pointer;
+    box-shadow: 0 0 0 3px rgba(31,111,235,0.25);
+  }
+  input[type=range]:disabled { opacity: 0.4; }
+
+  .range-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #8B949E;
+    margin-bottom: 14px;
+  }
+
+  .send-all-btn {
+    width: 100%;
+    padding: 16px;
+    font-size: 16px;
+    margin-top: 8px;
+  }
+
+  .note {
+    text-align: center;
+    font-size: 12px;
+    color: #8B949E;
+    margin-top: 20px;
+    line-height: 1.6;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #238636;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+  .toast.error { background: #DA3633; }
+</style>
+</head>
+<body>
+
+<h1>🧤 Parkinson's Glove</h1>
+<p class="subtitle">BLE Controller</p>
+
+<div id="status">
+  <span class="dot" id="dot"></span>
+  <span id="statusText">Tap Connect to find your glove</span>
+</div>
+
+<div class="btn-row">
+  <button class="btn-primary" id="btnConnect" onclick="connectGlove()">Connect Glove</button>
+  <button class="btn-secondary" id="btnDisconnect" onclick="disconnectGlove()" disabled>Disconnect</button>
+</div>
+
+<!-- Motor Amplitude -->
+<div class="card">
+  <div class="card-header">
+    <span class="param-name">Motor Amplitude</span>
+    <span class="param-value" id="valMA">100%</span>
+  </div>
+  <input type="range" id="sliderMA" min="50" max="100" value="100"
+         oninput="updateLabel('MA', this.value, '%')" disabled>
+  <div class="range-labels"><span>50%</span><span>100%</span></div>
+  <button class="btn-send" id="btnMA" onclick="sendMA()" disabled>Send Amplitude</button>
+</div>
+
+<!-- Burst Duration -->
+<div class="card">
+  <div class="card-header">
+    <span class="param-name">Burst Duration</span>
+    <span class="param-value" id="valBD">100ms</span>
+  </div>
+  <input type="range" id="sliderBD" min="50" max="150" value="100"
+         oninput="updateLabel('BD', this.value, 'ms')" disabled>
+  <div class="range-labels"><span>50ms</span><span>150ms</span></div>
+  <button class="btn-send" id="btnBD" onclick="sendBD()" disabled>Send Burst Duration</button>
+</div>
+
+<!-- Pattern Duration -->
+<div class="card">
+  <div class="card-header">
+    <span class="param-name">Pattern Duration</span>
+    <span class="param-value" id="valPD">744ms</span>
+  </div>
+  <input type="range" id="sliderPD" min="500" max="1000" value="744"
+         oninput="updateLabel('PD', this.value, 'ms')" disabled>
+  <div class="range-labels"><span>500ms</span><span>1000ms</span></div>
+  <button class="btn-send" id="btnPD" onclick="sendPD()" disabled>Send Pattern Duration</button>
+</div>
+
+<!-- Send All -->
+<button class="btn-success send-all-btn" id="btnAll" onclick="sendAll()" disabled>
+  ⚡ SEND ALL PARAMETERS
+</button>
+
+<p class="note">Open this page in <strong>Chrome for Android</strong><br>Web Bluetooth is not supported in Firefox or Safari</p>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── BLE UUIDs — match ParkinsonsGlove.ino exactly ─────────────────────────
+  const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+  const CHAR1_UUID   = 'beb5483e-36e1-4688-b7f5-ea07361b26a8'; // MAval
+  const CHAR2_UUID   = 'e3223119-9445-4e96-a4a1-85358c4046a2'; // PDval
+  const CHAR3_UUID   = 'e3223119-9445-4e96-a4a1-85358c4046a3'; // BDval
+
+  let device = null, server = null, service = null;
+  let charMA = null, charPD = null, charBD = null;
+
+  // ── UI helpers ─────────────────────────────────────────────────────────────
+  function setStatus(msg, state = 'idle') {
+    document.getElementById('statusText').textContent = msg;
+    const dot = document.getElementById('dot');
+    dot.className = 'dot ' + (state === 'connected' ? 'connected' : state === 'scanning' ? 'scanning' : state === 'error' ? 'error' : '');
+  }
+
+  function showToast(msg, isError = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (isError ? ' error' : '');
+    setTimeout(() => t.className = 'toast', 2000);
+  }
+
+  function updateLabel(param, value, unit) {
+    document.getElementById('val' + param).textContent = value + unit;
+  }
+
+  function setConnected(connected) {
+    document.getElementById('btnConnect').disabled = connected;
+    document.getElementById('btnDisconnect').disabled = !connected;
+    ['sliderMA','sliderBD','sliderPD','btnMA','btnBD','btnPD','btnAll'].forEach(id => {
+      document.getElementById(id).disabled = !connected;
+    });
+  }
+
+  // ── Connect ────────────────────────────────────────────────────────────────
+  async function connectGlove() {
+    if (!navigator.bluetooth) {
+      setStatus('Web Bluetooth not supported — use Chrome on Android', 'error');
+      return;
+    }
+    try {
+      setStatus('Scanning for ESP32...', 'scanning');
+      document.getElementById('btnConnect').disabled = true;
+
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ name: 'ESP32' }],
+        optionalServices: [SERVICE_UUID]
+      });
+
+      device.addEventListener('gattserverdisconnected', onDisconnected);
+      setStatus('Connecting...', 'scanning');
+
+      server  = await device.gatt.connect();
+      service = await server.getPrimaryService(SERVICE_UUID);
+      charMA  = await service.getCharacteristic(CHAR1_UUID);
+      charPD  = await service.getCharacteristic(CHAR2_UUID);
+      charBD  = await service.getCharacteristic(CHAR3_UUID);
+
+      setStatus('Connected to ' + device.name, 'connected');
+      setConnected(true);
+      showToast('Glove connected ✓');
+    } catch(e) {
+      setStatus('Connection failed: ' + e.message, 'error');
+      document.getElementById('btnConnect').disabled = false;
+      setConnected(false);
+    }
+  }
+
+  function onDisconnected() {
+    setStatus('Glove disconnected', 'error');
+    setConnected(false);
+    charMA = charPD = charBD = null;
+    showToast('Glove disconnected', true);
+  }
+
+  function disconnectGlove() {
+    if (device && device.gatt.connected) {
+      device.gatt.disconnect();
+    }
+  }
+
+  // ── Write helpers ──────────────────────────────────────────────────────────
+  async function writeChar(char, value) {
+    if (!char) { showToast('Not connected', true); return; }
+    const encoder = new TextEncoder();
+    await char.writeValue(encoder.encode(String(value)));
+  }
+
+  async function sendMA() {
+    const v = document.getElementById('sliderMA').value;
+    await writeChar(charMA, v);
+    showToast('Amplitude set to ' + v + '%');
+  }
+
+  async function sendBD() {
+    const v = document.getElementById('sliderBD').value;
+    await writeChar(charBD, v);
+    showToast('Burst duration set to ' + v + 'ms');
+  }
+
+  async function sendPD() {
+    const v = document.getElementById('sliderPD').value;
+    await writeChar(charPD, v);
+    showToast('Pattern duration set to ' + v + 'ms');
+  }
+
+  async function sendAll() {
+    try {
+      const ma = document.getElementById('sliderMA').value;
+      const bd = document.getElementById('sliderBD').value;
+      const pd = document.getElementById('sliderPD').value;
+      await writeChar(charMA, ma);
+      await new Promise(r => setTimeout(r, 300));
+      await writeChar(charBD, bd);
+      await new Promise(r => setTimeout(r, 300));
+      await writeChar(charPD, pd);
+      showToast('All parameters sent ✓');
+    } catch(e) {
+      showToast('Send failed: ' + e.message, true);
+    }
+  }
+</script>
+</body>
+</html>
